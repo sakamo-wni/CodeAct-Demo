@@ -1,0 +1,310 @@
+{
+  "LCLID": {
+    "jp": "ローカル観測所ID",
+    "en": "local station ID",
+    "unit": "",
+    "scale": 1,
+    "offset": 0
+  },
+  "PRCRIN_10MIN": {
+    "jp": "10分間降水量",
+    "en": "10‑minute precipitation amount",
+    "unit": "mm",
+    "scale": 1,
+    "offset": 0
+  },
+  "announced": {
+    "jp": "発表時刻",
+    "en": "announcement time",
+    "unit": "",
+    "scale": 1,
+    "offset": 0
+  },
+  "GUSTS_1HOUR": {
+    "jp": "前1時間最大瞬間風速",
+    "en": "previous 1‑hour maximum wind gust",
+    "unit": "m/s",
+    "scale": 0.1,
+    "offset": 0
+  },
+  "WNDSPD_1HOUR_MAX": {
+    "jp": "前1時間最大風速",
+    "en": "previous 1‑hour maximum wind speed",
+    "unit": "m/s",
+    "scale": 0.1,
+    "offset": 0
+  },
+  "WNDDIR_MD": {
+    "jp": "風向",
+    "en": "wind direction",
+    "unit": "°",
+    "scale": 1,
+    "offset": 0
+  },
+  "PRCRIN_1HOUR": {
+    "jp": "1時間降水量",
+    "en": "1‑hour precipitation amount",
+    "unit": "mm",
+    "scale": 1,
+    "offset": 0
+  },
+  "HVIS": {
+    "jp": "水平視程",
+    "en": "horizontal visibility",
+    "unit": "m",
+    "scale": 1,
+    "offset": 0
+  },
+  "time": {
+    "jp": "観測時刻",
+    "en": "observation time",
+    "unit": "",
+    "scale": 1,
+    "offset": 0
+  },
+  "WNDSPD_MD": {
+    "jp": "風速",
+    "en": "wind speed",
+    "unit": "m/s",
+    "scale": 0.1,
+    "offset": 0
+  },
+  "WNDDIR": {
+    "jp": "風向",
+    "en": "wind direction",
+    "unit": "°",
+    "scale": 1,
+    "offset": 0
+  },
+  "PRCINT": {
+    "jp": "累積降水量",
+    "en": "accumulated precipitation",
+    "unit": "mm",
+    "scale": 1,
+    "offset": 0
+  },
+  "GUSTD": {
+    "jp": "最大瞬間風向",
+    "en": "direction of maximum wind gust",
+    "unit": "°",
+    "scale": 1,
+    "offset": 0
+  },
+  "AIRTMP_10MIN_MAX": {
+    "jp": "前10分最高気温",
+    "en": "previous 10‑minute maximum air temperature",
+    "unit": "℃",
+    "scale": 0.1,
+    "offset": 0
+  },
+  "format": {
+    "jp": "フォーマット",
+    "en": "format",
+    "unit": "",
+    "scale": 1,
+    "offset": 0
+  },
+  "WX_original": {
+    "jp": "現在天気コード",
+    "en": "present weather code",
+    "unit": "code",
+    "scale": 1,
+    "offset": 0
+  },
+  "ID_GLOBAL_MNET": {
+    "jp": "グローバル観測所ID",
+    "en": "global station ID",
+    "unit": "",
+    "scale": 1,
+    "offset": 0
+  },
+  "AIRTMP_10MIN_MINI": {
+    "jp": "前10分最低気温",
+    "en": "previous 10‑minute minimum air temperature",
+    "unit": "℃",
+    "scale": 0.1,
+    "offset": 0
+  },
+  "global_id": {
+    "jp": "グローバルID",
+    "en": "global ID",
+    "unit": "",
+    "scale": 1,
+    "offset": 0
+  },
+  "WNDSPD_10MIN_MAX": {
+    "jp": "前10分最大風速",
+    "en": "previous 10‑minute maximum wind speed",
+    "unit": "m/s",
+    "scale": 0.1,
+    "offset": 0
+  },
+  "WNDSPD_1HOUR_AVG": {
+    "jp": "前1時間平均風速",
+    "en": "previous 1‑hour mean wind speed",
+    "unit": "m/s",
+    "scale": 0.1,
+    "offset": 0
+  },
+  "data_id": {
+    "jp": "データID",
+    "en": "data ID",
+    "unit": "",
+    "scale": 1,
+    "offset": 0
+  },
+  "lat": {
+    "jp": "緯度",
+    "en": "latitude",
+    "unit": "deg",
+    "scale": 1,
+    "offset": 0
+  },
+  "lon": {
+    "jp": "経度",
+    "en": "longitude",
+    "unit": "deg",
+    "scale": 1,
+    "offset": 0
+  },
+  "created": {
+    "jp": "作成日時",
+    "en": "created time",
+    "unit": "",
+    "scale": 1,
+    "offset": 0
+  },
+  "AMTCLD_8": {
+    "jp": "全天雲量",
+    "en": "total cloud cover",
+    "unit": "octas",
+    "scale": 1,
+    "offset": 0
+  },
+  "GUSTS": {
+    "jp": "最大瞬間風速",
+    "en": "maximum wind gust",
+    "unit": "m/s",
+    "scale": 0.1,
+    "offset": 0
+  },
+  "DEWTMP": {
+    "jp": "露点温度",
+    "en": "dew‑point temperature",
+    "unit": "℃",
+    "scale": 0.1,
+    "offset": 0
+  },
+  "SUNDUR_10MIN": {
+    "jp": "前10分日照時間",
+    "en": "previous 10‑minute sunshine duration",
+    "unit": "min",
+    "scale": 1,
+    "offset": 0
+  },
+  "ARPRSS": {
+    "jp": "海面更正気圧",
+    "en": "sea‑level pressure",
+    "unit": "hPa",
+    "scale": 0.1,
+    "offset": 0
+  },
+  "RHUM": {
+    "jp": "相対湿度",
+    "en": "relative humidity",
+    "unit": "%",
+    "scale": 1,
+    "offset": 0
+  },
+  "SCTRAD_10MIN": {
+    "jp": "前10分日射量",
+    "en": "previous 10‑minute global solar radiation",
+    "unit": "W/m2",
+    "scale": 1,
+    "offset": 0
+  },
+  "category": {
+    "jp": "カテゴリ",
+    "en": "category",
+    "unit": "",
+    "scale": 1,
+    "offset": 0
+  },
+  "data_size": {
+    "jp": "データサイズ",
+    "en": "data size",
+    "unit": "",
+    "scale": 1,
+    "offset": 0
+  },
+  "header_version": {
+    "jp": "ヘッダー版",
+    "en": "header version",
+    "unit": "",
+    "scale": 1,
+    "offset": 0
+  },
+  "WNDSPD": {
+    "jp": "風速",
+    "en": "wind speed",
+    "unit": "m/s",
+    "scale": 0.1,
+    "offset": 0
+  },
+  "AIRTMP": {
+    "jp": "気温",
+    "en": "air temperature",
+    "unit": "℃",
+    "scale": 0.1,
+    "offset": 0
+  },
+  "GLBRAD_10MIN": {
+    "jp": "前10分全天日射量",
+    "en": "previous 10‑minute global solar radiation",
+    "unit": "",
+    "scale": 1,
+    "offset": 0
+  },
+  "data_name": {
+    "jp": "データ名",
+    "en": "data name",
+    "unit": "",
+    "scale": 1,
+    "offset": 0
+  },
+  "revision": {
+    "jp": "リビジョン",
+    "en": "revision",
+    "unit": "",
+    "scale": 1,
+    "offset": 0
+  },
+  "data": {
+    "jp": "データ",
+    "en": "data",
+    "unit": "",
+    "scale": 1,
+    "offset": 0
+  },
+  "point_data": {
+    "jp": "地点データ",
+    "en": "point data",
+    "unit": "",
+    "scale": 1,
+    "offset": 0
+  },
+  "header_comment": {
+    "jp": "ヘッダーコメント",
+    "en": "header comment",
+    "unit": "",
+    "scale": 1,
+    "offset": 0
+  },
+  "header": {
+    "jp": "ヘッダー",
+    "en": "header",
+    "unit": "",
+    "scale": 1,
+    "offset": 0
+  }
+}

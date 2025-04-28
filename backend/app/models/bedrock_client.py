@@ -1,22 +1,22 @@
 # backend/app/models/bedrock_client.py
-import boto3
+from boto3 import Session, client
 from botocore.config import Config as BotoConfig
 import json
 from app.config import get_settings
 
-s = get_settings()
+settings = get_settings()
 
-# Bedrock 専用セッション（アクセスキーは .env.docker で設定）
-session = boto3.Session(
-    aws_access_key_id=s.bedrock_access_key_id,
-    aws_secret_access_key=s.bedrock_secret_access_key,
-    aws_session_token=s.bedrock_session_token,
-    region_name=s.bedrock_region,
-)
+# --- S3 用：SSO プロファイル ------------------------------
+s3_session = Session(profile_name=settings.aws_profile)
+s3_client = s3_session.client("s3")
 
-client = session.client(
+# --- Bedrock 用：キー認証 -------------------------------
+bedrock_client = client(
     "bedrock-runtime",
-    config=BotoConfig(retries={"max_attempts": 3, "mode": "standard"}),
+    region_name=settings.bedrock_region,
+    aws_access_key_id=settings.bedrock_access_key_id,
+    aws_secret_access_key=settings.bedrock_secret_access_key,
+    aws_session_token=settings.bedrock_session_token,
 )
 
 def invoke_claude(prompt: str, max_tokens: int = 256, temp: float = 0.5) -> str:
@@ -29,8 +29,8 @@ def invoke_claude(prompt: str, max_tokens: int = 256, temp: float = 0.5) -> str:
         "max_tokens": max_tokens,
         "temperature": temp,
     }
-    resp = client.invoke_model(
-        modelId=s.bedrock_model_id,
+    resp = bedrock_client.invoke_model(
+        modelId=settings.bedrock_model_id,
         contentType="application/json",
         accept="application/json",
         body=json.dumps(payload).encode("utf-8"),

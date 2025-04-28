@@ -82,3 +82,8 @@ docker-compose.override.yml
 
 .env.docker
 
+# ---- runtime / cache ---------------------------------
+backend/tmp/
+frontend/.next/
+node_modules/
+

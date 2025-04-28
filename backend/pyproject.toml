@@ -1,0 +1,33 @@
+[tool.poetry]
+name = "ai-data-backend"
+version = "0.1.0"
+description = ""
+authors = ["Your Name <you@example.com>"]
+packages = [{ include = "app" }]
+
+[tool.poetry.dependencies]
+python           = "^3.11"
+fastapi          = "^0.110"
+uvicorn          = "^0.29"
+langgraph        = "0.3.31"
+# ★ GitHub 版 langserve (Pydantic v2 対応)
+langserve        = { git = "https://github.com/langchain-ai/langserve.git", rev = "main" }
+
+# LangChain ファミリー（すべて 0.3 系で統一）
+langchain        = "^0.3.24"        # メタパッケージ
+langchain-core   = "^0.3.24"        # 明示しても OK
+langchain-community = "^0.3.22"     # ← NEW 最新版
+
+boto3            = "^1.38"
+pydantic         = { extras = ["dotenv"], version = "^2.11" }
+pydantic-settings = "^2.9.1"
+sse-starlette    = "^1.8.2"        # ★ これを追記
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.2"
+ruff   = "^0.4"
+mypy   = "^1.10"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

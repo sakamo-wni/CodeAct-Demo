@@ -1,0 +1,68 @@
+[
+    {
+      "organization": "DWD",
+      "country": "Germany",
+      "TagID": "441000205",
+      "observation_bucket": "wni-wfc-stock-ane1",
+      "s3_prefix": "441000205/",
+      "observation_format": "ru",
+      "observation_type": "AWS",
+      "variables": ["temperature", "humidity", "wind"],
+      "description": "ドイツAWS一時QC済み",
+      "location_metadata": {
+        "bucket": "wni-wfc-stock-ane1",
+        "prefix": "441000216/",
+        "format": "json"
+      }
+    },
+    {
+      "organization": "DWD",
+      "country": "Germany",
+      "TagID": "441000206",
+      "observation_bucket": "wni-wfc-stock-ane1",
+      "s3_prefix": "441000206/",
+      "observation_format": "ru",
+      "observation_type": "SYNOP",
+      "variables": ["temperature", "humidity", "wind"],
+      "description": "ドイツSYNOP一時QC済み",
+      "location_metadata": {
+        "bucket": "wni-wfc-stock-ane1",
+        "prefix": "441000203/",
+        "format": "json"
+      }
+    },
+
+    {
+      "organization": "KNMI",
+      "country": "Netherlands",
+      "TagID": "441000196",
+      "observation_bucket": "wni-wfc-stock-ane1",
+      "s3_prefix": "441000196/",
+      "observation_format": "ru",
+      "observation_type": "AWS",
+      "variables": ["temperature", "pressure"],
+      "description": "オランダAWS一時QC済み",
+      "location_metadata": {
+        "bucket": "wni-wfc-stock-ane1",
+        "prefix": "441000171/",
+        "format": "json"
+      }
+    },
+    {
+      "organization": "DMI",
+      "country": "Denmark",
+      "TagID": "441000207",
+      "observation_bucket": "wni-wfc-stock-ane1",
+      "s3_prefix": "441000207/",
+      "observation_format": "ru",
+      "observation_type": "AWS",
+      "variables": ["temperature", "wind"],
+      "description": "デンマークAWS一時QC済み",
+      "location_metadata": {
+        "bucket": "wni-wfc-stock-ane1",
+        "prefix": "441000204/",
+        "format": "json"
+      }
+    }
+  ]
+  

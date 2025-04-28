@@ -88,7 +88,17 @@ def interpret_node(state: FlowState) -> Dict[str, Any]:
     # ③ キー名を標準化
     parsed = {KEY_MAP.get(k, k): v for k, v in parsed.items()}
 
-    # ④ 欠損キーを正規表現で補完
+    # ★ ④-1. date + 時刻 hh:mm を結合して ISO っぽく補完 ----------
+    if "date" in parsed:
+        date_part = parsed.pop("date")
+        # hh:mm → yyyy-mm-dd hh:mm:00
+        if "start_dt" in parsed and re.fullmatch(r"\d{1,2}:\d{2}", parsed["start_dt"]):
+            parsed["start_dt"] = f"{date_part} {parsed['start_dt']}:00"
+        if "end_dt" in parsed and re.fullmatch(r"\d{1,2}:\d{2}", parsed["end_dt"]):
+            parsed["end_dt"] = f"{date_part} {parsed['end_dt']}:00"
+    # ----------------------------------------------------------------
+
+    # ④-2. 欠損キーを正規表現で補完
     if "tag_id" not in parsed:
         if m := re.search(r"\b(\d{9})\b", user_input):
             parsed["tag_id"] = m.group(1)
