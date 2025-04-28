@@ -1,0 +1,84 @@
+# ---- GLOBAL / OS --------------------------------------------------
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/
+
+# ---- PYTHON (Backend) --------------------------------------------
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# Virtual‑envs (local)
+.env/
+venv/
+.venv/
+.Python
+
+# Poetry build artefacts
+build/
+dist/
+.eggs/
+*.egg-info/
+*.egg
+pip-wheel-metadata/
+
+# Caches & test output
+.pytest_cache/
+.cache/
+.coverage
+htmlcov/
+
+# Logs
+*.log
+logs/
+
+# ---- LANGGRAPH / LANGSMITH ---------------------------------------
+langgraph_studio.db
+langsmith_logs/
+
+# ---- NODE / NEXT.JS (Frontend) -----------------------------------
+frontend/node_modules/
+frontend/.next/
+frontend/.next.cache/
+frontend/out/
+# Next.js telemetry
+.next-turbo/
+
+# TypeScript build info
+*.tsbuildinfo
+
+# Tailwind JIT cache
+.tailwind-cache/
+
+# NPM / Yarn / pnpm logs
+npm-debug.log*
+yarn-debug.log*
+.pnpm-debug.log*
+
+# ---- ENV & SECRETS ------------------------------------------------
+.env
+.env.*
+*.env
+
+# ---- DOCKER LOCAL OVERRIDES --------------------------------------
+docker-compose.override.yml
+
+# ---- AWS / CI artefacts ------------------------------------------
+.aws-sam/
+
+# ---- IMAGES / TEMP ------------------------------------------------
+/tmp/
+*.tmp
+*.bak
+
+# ---- EXPO (mobile client, optional) ------------------------------
+.expo/
+.expo-shared/
+
+.env.docker
+
