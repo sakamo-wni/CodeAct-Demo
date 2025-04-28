@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     s3_bucket: str = "wni-wfc-stock-ane1"
 
     # --- Bedrock 専用キー ---
+    bedrock_model_id: str | None = None
     bedrock_access_key_id: str | None = None
     bedrock_secret_access_key: str | None = None
     bedrock_session_token: str | None = None
