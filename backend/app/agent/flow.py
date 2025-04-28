@@ -1,8 +1,9 @@
 """
-LangGraph PoC — Claude 3 Sonnet でパラメータ抽出 → S3 取得
+LangGraph PoC — Claude 3 Sonnet でパラメータ抽出 → S3 取得 → 変換
 (1) LLM → JsonOutputParser で構造化
 (2) フォーマット逸脱時は _extract_json() で安全抽出
 (3) キー名を標準化して型バリデーション
+(4) convert_node で CSV / JSON / XML へ変換
 """
 
 from __future__ import annotations
@@ -15,18 +16,22 @@ from pydantic import BaseModel, Field, ValidationError
 
 from app.models.bedrock_client import invoke_claude
 from app.agent.tools.s3_fetcher import LoadRuFilesTool
+from app.agent.tools.convert_node import convert_node  # ★ LangGraph Tool
 
 # ─── 1. Flow State ───────────────────────────────────────────────
 class FlowState(TypedDict, total=False):
-    input:  str
-    parsed: Dict[str, Any]
-    files:  List[str]
+    input:     str
+    parsed:    Dict[str, Any]
+    files:     List[str]
+    converted: List[str]
 
 # ─── 2. Pydantic schema Claude should output ─────────────────────
 class ParsedParams(BaseModel):
     tag_id:   str = Field(..., pattern=r"\d{9}")
     start_dt: str
     end_dt:   str
+    # 任意
+    format:   str | None = None
 
 json_parser = JsonOutputParser(pydantic_schema=ParsedParams)
 
@@ -72,17 +77,11 @@ def interpret_node(state: FlowState) -> Dict[str, Any]:
     try:
         params = json_parser.parse(raw_reply)
 
-        # A) pydantic モデルなら dict 化
-        if hasattr(params, "model_dump"):
-            parsed = params.model_dump()
-
-        # B) dict（Anthropic Message 等）の場合は
-        #    content.text から JSON を抽出
-        elif isinstance(params, dict):
-            parsed = (_extract_json(params) or params)
+        # A) pydantic モデル → dict
+        parsed = params.model_dump()
 
     except ValidationError:
-        # C) そもそも parse できなかった場合
+        # parse できなかった場合
         parsed = _extract_json(raw_reply) or {}
 
     # ③ キー名を標準化
@@ -91,7 +90,6 @@ def interpret_node(state: FlowState) -> Dict[str, Any]:
     # ★ ④-1. date + 時刻 hh:mm を結合して ISO っぽく補完 ----------
     if "date" in parsed:
         date_part = parsed.pop("date")
-        # hh:mm → yyyy-mm-dd hh:mm:00
         if "start_dt" in parsed and re.fullmatch(r"\d{1,2}:\d{2}", parsed["start_dt"]):
             parsed["start_dt"] = f"{date_part} {parsed['start_dt']}:00"
         if "end_dt" in parsed and re.fullmatch(r"\d{1,2}:\d{2}", parsed["end_dt"]):
@@ -131,13 +129,29 @@ def fetch_node(state: FlowState) -> Dict[str, List[str]]:
     except Exception as e:
         return {"files": [f"Error: {e}"]}
 
-# ─── 6. LangGraph Assembly ────────────────────────────────────────
+# ─── 6. Convert Node ─────────────────────────────────────────────
+def run_convert_node(state: FlowState) -> Dict[str, Any]:
+    """
+    files → converted
+    format が無ければ 'csv'。
+    """
+    files = state["files"]
+    fmt   = state["parsed"].get("format", "csv")
+    try:
+        converted = convert_node.func(files, fmt)
+        return {"converted": converted}
+    except Exception as e:
+        return {"converted": [f"Error: {e}"]}
+
+# ─── 7. LangGraph Assembly ────────────────────────────────────────
 graph = StateGraph(FlowState)
-graph.add_node("interpret", interpret_node)   # input  → parsed
-graph.add_node("fetch",     fetch_node)       # parsed → files
+graph.add_node("interpret", interpret_node)     # input  → parsed
+graph.add_node("fetch",     fetch_node)         # parsed → files
+graph.add_node("convert",   run_convert_node)   # files  → converted
 
 graph.set_entry_point("interpret")
 graph.add_edge("interpret", "fetch")
-graph.set_finish_point("fetch")
+graph.add_edge("fetch", "convert")
+graph.set_finish_point("convert")
 
 workflow = graph.compile()
