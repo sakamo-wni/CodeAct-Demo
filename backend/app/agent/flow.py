@@ -14,6 +14,7 @@ from app.models.bedrock_client import invoke_claude
 from app.agent.tools.s3_fetcher import LoadRuFilesTool
 from app.agent.tools.convert_node import convert_node
 from app.agent.tools.viz_node import viz_node
+from app.agent.tools.fallback_node import fallback_node
 from app.utils.country_resolver import (
     resolve_country_name,
     find_tag_ids_by_country,
@@ -148,11 +149,15 @@ graph.add_node("interpret", interpret_node)
 graph.add_node("fetch",     fetch_node)
 graph.add_node("convert",   run_convert_node)
 graph.add_node("viz",       run_viz_node)
+graph.add_node("fallback",  fallback_node)
 
 graph.set_entry_point("interpret")
 graph.add_edge("interpret", "fetch")
 graph.add_edge("fetch",     "convert")
 graph.add_edge("fetch",     "viz")      # 変換不要でも viz 可
+graph.add_edge("convert",   "fallback", error=True)
+graph.add_edge("viz",       "fallback", error=True)
+graph.add_edge("fallback",  "viz")
 graph.set_finish_point("viz")
 
 workflow = graph.compile()
