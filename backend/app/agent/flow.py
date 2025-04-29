@@ -160,8 +160,8 @@ graph.add_edge("interpret", "fetch")
 graph.add_edge("fetch",     "convert")
 graph.add_edge("fetch",     "viz")      # 変換不要でも viz 可
 # 失敗時は fallback_node へ
-graph.set_error_handler("convert", "fallback")
-graph.set_error_handler("viz", "fallback")
+graph.add_edge("convert", "fallback", error=True)
+graph.add_edge("viz",     "fallback", error=True)
 graph.add_edge("fallback",  "viz")
 graph.set_finish_point("viz")
 
