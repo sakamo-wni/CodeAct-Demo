@@ -5,10 +5,10 @@ from app.agent.tools import convert_to_csv, convert_to_json, convert_to_xml
 @tool("convert_ru")
 def convert_node(files: list[str], fmt: str) -> list[str]:
     """fmt = csv|json|xml で RU→変換ファイルのパスを返す"""
-    from app.utils.ru_utils import ru_to_df
+    from app.utils.ru_utils import load_ru
     import pandas as pd, uuid, os
 
-    df = pd.concat([ru_to_df(f) for f in files], ignore_index=True)
+    df = pd.concat([load_ru(f) for f in files], ignore_index=True)
     parsed = {"data": {"point_data": df.to_dict(orient="records")}}
 
     if fmt == "csv":

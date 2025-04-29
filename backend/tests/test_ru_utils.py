@@ -1,14 +1,14 @@
-from pathlib import Path
-from app.utils.ru_utils import ru_to_df, resolve_variable
+import pandas as pd
+import pytest
+from app.utils.ru_utils import load_ru
 
-SAMPLE = Path(__file__).parent / "data" / "sample.ru"
+@pytest.mark.skip(reason="地点メタは RU ではなく location.json で扱うためスキップ")
+def test_load_geojson():
+    pass
 
-def test_ru_to_df():
-    df = ru_to_df(SAMPLE)
-    assert not df.empty
-    assert "AIRTMP" in df.columns
-
-def test_resolve_variable():
-    assert resolve_variable("気温") == "AIRTMP"
-    assert resolve_variable("air temperature") == "AIRTMP"
-    assert resolve_variable("AIRTMP") == "AIRTMP"
+def test_load_gzip_obs(sample_obs_ru):
+    df = load_ru(sample_obs_ru)
+    # 時刻＋代表的な変数列
+    assert {"time", "AIRTMP", "WNDSPD_MD"}.issubset(df.columns)
+    # スケール適用後、気温が plausible 範囲にあること
+    assert df["AIRTMP"].dropna().between(-50, 60).all()

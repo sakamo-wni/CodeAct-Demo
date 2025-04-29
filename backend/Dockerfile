@@ -1,5 +1,6 @@
 # ---- 1️⃣ ベースイメージ ---------------------------------
     FROM python:3.11-slim AS base
+    ARG BUILDKIT_INLINE_CACHE=0
 
     # ---- 2️⃣ システム依存ライブラリ（必要最小限） ----------
     RUN apt-get update && \
@@ -12,6 +13,7 @@
     
     # ---- 4️⃣ 作業ディレクトリ設定 ----------------------------
     WORKDIR /code
+    ENV PYTHONPATH="/code"
     
     # ---- 5️⃣ pyproject.toml と poetry.lock をコピー ---------
     COPY pyproject.toml poetry.lock* /code/
@@ -19,7 +21,7 @@
 
     # ---- 6️⃣ 依存インストール（本番のみ） -------------------
     RUN poetry config virtualenvs.create false \
-     && poetry install --no-dev --only main
+     && poetry install --no-root --with dev
     
     # ---- 7️⃣ アプリコードコピー ------------------------------
     COPY app /code/app

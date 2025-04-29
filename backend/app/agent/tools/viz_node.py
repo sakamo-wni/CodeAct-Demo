@@ -12,7 +12,7 @@ import cartopy.crs as ccrs
 from langchain.tools import tool
 
 from app.utils.ru_utils import (
-    ru_to_df,
+    load_ru,
     ensure_latlon,
     extract_columns,
     resolve_variable,
@@ -58,7 +58,7 @@ def viz_node(
     x, y      : 軸に使う列名（scatter / bar 用）
     """
     # ------ 1. RU → DataFrame --------------------------------------
-    df = pd.concat([ru_to_df(p) for p in ru_files], ignore_index=True)
+    df = pd.concat([load_ru(p) for p in ru_files], ignore_index=True)
 
     # ------ 2. 変数名をコードに正規化 --------------------------------
     def _resolve(name: str | None) -> str | None:

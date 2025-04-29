@@ -31,6 +31,7 @@ pandas = "^2.2"          # ★ これを追記
 pytest = "^8.2"
 ruff   = "^0.4"
 mypy   = "^1.10"
+pytest-cov = "^6.1.1"
 
 [build-system]
 requires = ["poetry-core"]
