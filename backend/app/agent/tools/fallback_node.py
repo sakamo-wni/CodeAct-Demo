@@ -15,7 +15,7 @@ except ImportError:  # テスト環境でモックに置き換えるためのフ
             # ダミーコードを返して sandbox 実行が通るように
             return "print('dummy CodeAct execution')"
 
-from langgraph import tool
+from langchain_core.tools import tool
 
 from app.codeact_sandbox import run_code_act
 

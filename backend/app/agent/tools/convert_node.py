@@ -1,5 +1,5 @@
 # app/agent/tools/convert_node.py
-from langchain.tools import tool
+from langchain_core.tools import tool
 from app.agent.tools import convert_to_csv, convert_to_json, convert_to_xml
 
 @tool("convert_ru")

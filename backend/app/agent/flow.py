@@ -12,13 +12,17 @@ from pydantic import BaseModel, Field, ValidationError
 
 from app.models.bedrock_client import invoke_claude
 from app.agent.tools.s3_fetcher import LoadRuFilesTool
-from app.agent.tools.convert_node import convert_node
-from app.agent.tools.viz_node import viz_node
-from app.agent.tools.fallback_node import fallback_node
+from app.agent.tools.convert_node import convert_node as _convert_tool
+from app.agent.tools.viz_node import viz_node as _viz_tool
+from app.agent.tools.fallback_node import fallback_node as _fallback_tool
 from app.utils.country_resolver import (
     resolve_country_name,
     find_tag_ids_by_country,
 )
+
+convert_node = _convert_tool.func
+viz_node = _viz_tool.func
+fallback_node = _fallback_tool.func
 
 # ---------- 1. 状態定義 -------------------------------------------------
 class FlowState(TypedDict, total=False):
@@ -120,7 +124,7 @@ def run_convert_node(state: FlowState) -> Dict[str, Any]:
     if not fmt:
         return {}
     try:
-        paths = convert_node.func(state["files"], fmt)
+        paths = convert_node(state["files"], fmt)
         return {"converted": paths}
     except Exception as e:
         return {"converted": [f"Error: {e}"]}
@@ -131,7 +135,7 @@ def run_viz_node(state: FlowState) -> Dict[str, Any]:
     if not chart:
         return {}
     try:
-        img = viz_node.func(
+        img = viz_node(
             state["files"],
             chart,
             tag_id=state["parsed"].get("tag_id"),
