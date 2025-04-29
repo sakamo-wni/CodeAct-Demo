@@ -1,123 +1,217 @@
 """
-RU → pandas.DataFrame 変換 & 変数名マッピングユーティリティ
+ru_utils.py – RU ファイル（GeoJSON / gzip 観測）→ pandas.DataFrame
+
+・フォーマット自動判定
+    - header.format == "GJSON"           → GeoJSON 地点メタ
+    - header.compress_type == "gzip"     → 観測データ (KNMI_OBS_SYNOP_raw など)
+・観測データは RU.py を利用し、variables_map.json のスケール / offset を適用
 """
+
 from __future__ import annotations
-
-import json, uuid, re
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List
 
+import json
+import gzip
+import io
 import pandas as pd
-from fuzzywuzzy import process
+import numbers
+import numpy as np
 
-from app.agent.tools.ru_parser import parse_ru_file            # 既存
-from app.agent.tools.s3_fetcher import download_location_json  # ★ 追加ヘルパ
+from app.agent.tools.RU import RU, Header  # RU.py を tools 配下へ移動済み前提
 
-BASE_DIR = Path(__file__).resolve().parents[2]  # backend/
-VARS_PATH = BASE_DIR / "app" / "data" / "variables_map.json"
-META_PATH = BASE_DIR / "app" / "data" / "metadata.json"
+# 「…/backend/app/utils/ru_utils.py」から見て 3 つ親 = backend/
+BACKEND_ROOT = Path(__file__).resolve().parents[2]   # /code/backend
 
-# ---------------- 変数コード <-> 一般名 ---------------------------
-with open(VARS_PATH, encoding="utf-8") as f:
-    _VAR_MAP: Dict[str, Dict[str, str]] = json.load(f)
+# 変数メタ
+VARIABLES_MAP: Dict[str, Dict] = json.loads(
+    (BACKEND_ROOT / "app" / "data" / "variables_map.json").read_text(encoding="utf-8")
+)
 
-_CODE2NAME = {c: (_VAR_MAP[c]["jp"], _VAR_MAP[c]["en"]) for c in _VAR_MAP}
-_NAME2CODE = {
-    name: code
-    for code, (jp, en) in _CODE2NAME.items()
-    for name in (code, jp, en)
-}
+__all__ = ["load_ru", "ensure_latlon", "extract_columns", "resolve_variable"]
 
-def resolve_variable(query: str) -> str:
-    if query in _NAME2CODE:
-        return _NAME2CODE[query]
-    candidate, score = process.extractOne(query, _NAME2CODE.keys())
-    if score >= 90:
-        return _NAME2CODE[candidate]
-    raise KeyError(f"変数名を特定できません: {query}")
+# ----------------------------------------------------------------------
+def _load_geojson(body: bytes) -> pd.DataFrame:
+    """GeoJSON → DataFrame"""
+    gjson = json.loads(body.decode("utf-8"))
+    rows: List[Dict] = []
+    for feat in gjson["features"]:
+        lon, lat, *alt = feat["geometry"]["coordinates"]
+        props = feat["properties"]
+        rows.append(
+            {
+                **props,
+                "lat": lat,
+                "lon": lon,
+                "alt": alt[0] if alt else None,
+            }
+        )
+    return pd.DataFrame(rows)
 
-# ---------------- RU → DataFrame ---------------------------------
-def ru_to_df(path: str | Path) -> pd.DataFrame:
-    parsed = parse_ru_file(str(path))
-    rows = parsed["data"]["point_data"]
-    df = pd.json_normalize(rows)
 
-    # ── ヘッダー部の announced（観測時刻）を列として付与 ──
-    announced = parsed["header"].get("announced")  # 例: "2025/04/20 00:05:44 GMT"
-    if announced and "announced" not in df.columns:
-        df.insert(0, "announced", announced)       # 先頭列に追加
+def _load_gzip_observation(ru_bytes: bytes) -> pd.DataFrame:
+    """gzip 観測 RU → DataFrame"""
+    fp = io.BytesIO(ru_bytes)
+    ru = RU()
+    ru.load(fp)  # ヘッダ検出 → gzip 展開 → 構造化
+
+    hdr: Header = ru.get_header()
+    root = ru.get_root()
+
+    # --- 観測レコードへ変換 -------------------------------------------
+    # 仕様: root 構造体 直下に 'observation_date' Struct + 'point_data' Array[]
+    recs: List[Dict] = []
+    obs_time_struct = root.get_ref("observation_date")
+    dt = obs_time_struct.get_time().replace(tzinfo=None)  # naive UTC
+    pt_arr = root.get_ref("point_data")
+
+    for pt in pt_arr:
+        rec: Dict = {
+            "time": dt,
+            # announced (header) を各レコードに付与 ---------------
+            "announced": pd.to_datetime(hdr["announced"], utc=True)
+            if "announced" in hdr
+            else dt,
+        }
+        for key in pt.keys():
+            v = pt[key]
+
+            if isinstance(v, numbers.Number):
+                # ---------- 欠測コード判定 ----------
+                if abs(v) >= 32000:           # 32000 系は欠測
+                    rec[key] = np.nan
+                    continue
+
+                # ---------- スケール補正 ----------
+                meta = VARIABLES_MAP.get(key, {})
+                scale  = float(meta.get("scale", 1))
+                offset = float(meta.get("offset", 0))
+                val = v * scale + offset      # 例: 327 → 32.7
+
+                # ---------- 気温の物理範囲チェック ----------
+                if key == "AIRTMP" and not (-80 <= val <= 70):
+                    rec[key] = np.nan          # 異常値も欠測扱い
+                else:
+                    rec[key] = round(val, 3)
+            else:
+                # 文字列・欠損はそのまま
+                rec[key] = v
+
+        recs.append(rec)
+
+    df = pd.DataFrame(recs)
+    # announced を naive UTC に統一
+    if "announced" in df.columns:
+        df["announced"] = pd.to_datetime(df["announced"], utc=True).dt.tz_localize(None)
+
+    # --- 欠測行を除外 -------------------------------------------
+    numeric_cols = [c for c in df.columns if df[c].dtype.kind in "fiu"]
+    df = df.dropna(subset=numeric_cols, how="all")  # 全数値列が NaN の行だけ除去
 
     return df
 
-# =================================================================
-# lat/lon 補完  ★ 本実装
-# =================================================================
-def _tagid_to_latlon(tag_id: str) -> Optional[Tuple[float, float]]:
+
+# ----------------------------------------------------------------------
+def load_ru(path: str | Path) -> pd.DataFrame:
     """
-    TagID → metadata.json → location_metadata(bucket/prefix) →
-    location JSON を取得し lat/lon を返す。
-    ローカル app/data/{prefix}.json があればそれを優先、
-    無ければ S3 からダウンロード（download_location_json）。
+    RU ファイルを DataFrame にロード（フォーマット自動判定）
     """
-    meta = json.loads(META_PATH.read_text(encoding="utf-8"))
-    rec = next((m for m in meta if m["TagID"] == tag_id), None)
-    if not rec:
-        return None
+    data = Path(path).read_bytes()
 
-    loc = rec["location_metadata"]           # {"bucket":..., "prefix":..., "format":"json"}
-    key = f"{loc['prefix'].rstrip('/')}/location.json"
+    # 1) ヘッダ抽出
+    if not data.startswith(b"WN\n"):
+        raise ValueError("Not an RU file")
 
-    # 1) ローカルに置いてある場合
-    local = BASE_DIR / "app" / "data" / key
-    if local.exists():
-        j = json.loads(local.read_text(encoding="utf-8"))
-        return j.get("lat"), j.get("lon")
+    # header_end = b"\x04\x1a" の直前までがヘッダ
+    end_idx = data.find(b"\x04\x1a")
+    if end_idx == -1:
+        raise ValueError("invalid RU header")
+    header_part = data[: end_idx + 2].decode("ascii", errors="replace")
 
-    # 2) S3 から取得
-    try:
-        j = download_location_json(loc["bucket"], key)
-        return j.get("lat"), j.get("lon")
-    except Exception:
-        return None
+    # compress_type 判定
+    compress = None
+    for line in header_part.splitlines():
+        if line.startswith("compress_type="):
+            compress = line.split("=", 1)[1]
+            break
+    hdr_format = None
+    for line in header_part.splitlines():
+        if line.startswith("format="):
+            hdr_format = line.split("=", 1)[1]
+            break
+
+    body = data[end_idx + 2 :]
+
+    if hdr_format == "GJSON":
+        return _load_geojson(body)
+    elif compress == "gzip":
+        return _load_gzip_observation(data)
+    else:
+        raise NotImplementedError(f"unsupported RU format: {hdr_format}, compress={compress}")
+
+
+def _tagid_to_latlon(tag_id: str) -> tuple[float, float]:
+    """
+    tag_idから緯度経度を取得する関数
+    テストではmonkeypatchで差し替える想定
+    """
+    from app.utils.country_resolver import find_metadata_by_tag
+    meta = find_metadata_by_tag(tag_id)
+    loc_df = load_ru(meta["location_metadata"]["local_path"])
+    return loc_df["lat"].mean(), loc_df["lon"].mean()
+
 
 def ensure_latlon(df: pd.DataFrame, tag_id: str | None = None) -> pd.DataFrame:
     """
-    1) DataFrame に lat/lon 列があればそのまま
-    2) TagID が与えられていれば location_metadata JSON から補完
-    3) どちらも無理なら ValueError
+    lat/lon が無ければ metadata.json から該当地点情報を読み込んで補完
+    （flow 内から既存の ensure_latlon 呼び出しに合わせる）
     """
-    if {"lat", "lon"}.issubset(df.columns):
+    if {"lat", "lon"} <= set(df.columns):
         return df
 
-    # 別名 (latitude/longitude) があれば rename
-    lat_col = next((c for c in df.columns if c.lower() in {"latitude", "lat"}), None)
-    lon_col = next((c for c in df.columns if c.lower() in {"longitude", "lon"}), None)
-    if lat_col and lon_col:
-        return df.rename(columns={lat_col: "lat", lon_col: "lon"})
+    if not tag_id:
+        raise ValueError("緯度経度を補完できません")
 
-    # TagID 由来で補完
-    if tag_id:
-        ll = _tagid_to_latlon(tag_id)
-        if ll:
-            lat, lon = ll
-            new_df = df.copy()
-            new_df["lat"] = lat
-            new_df["lon"] = lon
-            return new_df
+    # テストでは monkeypatch で差し替える
+    lat, lon = _tagid_to_latlon(tag_id)
+    return df.assign(lat=lat, lon=lon)
 
-    raise ValueError("緯度経度を補完できません")
 
-# ------------------------------------------------------------------
-# ユーザ指定変数だけを抽出するヘルパ
-# ------------------------------------------------------------------
-def extract_columns(df: pd.DataFrame, vars_: list[str]) -> pd.DataFrame:
+def extract_columns(df: pd.DataFrame, names):
     """
-    ユーザー入力（日本語 / 英語 / コード）のリストを
-    すべて RU 変数コードへ解決し、該当列だけ抽出して返す。
-    存在しない列があれば KeyError。
+    names に含まれる列だけ返す。列が無ければ KeyError
+    (viz_node 互換の軽量ユーティリティ)
     """
-    codes = [resolve_variable(v) for v in vars_]
-    missing = [c for c in codes if c not in df.columns]
+    if isinstance(names, str):
+        names = [names]
+
+    missing = [col for col in names if col not in df.columns]
     if missing:
-        raise KeyError(f"DataFrame に列がありません: {missing}")
-    return df[codes]
+        raise KeyError(f"columns not found: {missing}")
+
+    return df[names]
+
+
+def resolve_variable(alias: str) -> str:
+    """
+    入力 alias を variables_map.json から正規コードへ解決する簡易版
+    - 完全一致 (大文字小文字区別なし)
+    - jp/en 名称またはコードにヒットすればコードを返す
+    - 見つからなければそのまま返却（viz_node 側で KeyError にさせる）
+    """
+    alias_norm = alias.lower()
+
+    # 1) 変数コード完全一致
+    if alias_norm in (k.lower() for k in VARIABLES_MAP.keys()):
+        return next(k for k in VARIABLES_MAP if k.lower() == alias_norm)
+
+    # 2) jp / en 名称一致
+    for code, meta in VARIABLES_MAP.items():
+        if alias_norm in (
+            meta.get("jp", "").lower(),
+            meta.get("en", "").lower(),
+        ):
+            return code
+
+    # 3) 未解決ならそのまま
+    return alias
