@@ -4,9 +4,29 @@ from datetime import datetime
 from langchain.tools import BaseTool
 from .s3_loader import load_from_s3
 from app.config import get_settings
+from pathlib import Path, PurePosixPath
+import json, botocore, boto3
 
 settings = get_settings()
 
+BASE_DIR = Path(__file__).resolve().parents[2]
+
+def download_location_json(bucket: str, key: str) -> dict:
+    """
+    location_metadata の JSON を取得して dict を返す。
+    1) backend/app/data/{key} に存在すればローカルを使用
+    2) 無ければ S3 からダウンロード
+    """
+    local = BASE_DIR / "app" / "data" / key
+    if local.exists():
+        return json.loads(local.read_text(encoding="utf-8"))
+
+    s3 = boto3.client("s3")
+    try:
+        obj = s3.get_object(Bucket=bucket, Key=key)
+        return json.load(obj["Body"])
+    except botocore.exceptions.ClientError as e:
+        raise RuntimeError(f"S3 から location JSON を取得できません: s3://{bucket}/{key}") from e
 
 class LoadRuFilesTool(BaseTool):
     """指定した TagID・日時範囲の ru ファイルを S3 からダウンロードする"""
