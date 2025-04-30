@@ -1,30 +1,37 @@
 name: CI
-
 on:
-  pull_request:
   push:
     branches: [main]
+  pull_request: {}
 
 jobs:
   test:
     runs-on: ubuntu-latest
     env:
-      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}   # ← 追加
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      # Python だけでなく Docker ビルド用の環境も使うので Buildx は残す
+      - uses: docker/setup-buildx-action@v3
 
-      - name: Create dummy env file
+      # ① Secrets を書き込んだ .env.docker を生成
+      - name: Prepare env file for Docker
         run: |
           mkdir -p backend
-          touch backend/.env.docker
+          cat <<EOF > backend/.env.docker
+          OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+          # ↓将来 Bedrock を使うならここに追加
+          # AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}
+          # AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          EOF
+          ls -l backend/.env.docker   # デバッグ用に内容は伏せたまま存在確認
 
-      - name: Build backend image (api)
-        run: docker compose build --build-arg BUILDKIT_INLINE_CACHE=1 api
+      # ② backend イメージをビルド（キャッシュ効くならお好みで arg 維持）
+      - name: Build backend image
+        run: docker compose build api
 
+      # ③ pytest を実行（env_file 経由なので -e は不要）
       - name: Run tests
-        run: docker compose run --rm -e OPENAI_API_KEY=$OPENAI_API_KEY api pytest -q
+        run: docker compose run --rm api pytest -q
