@@ -8,6 +8,8 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}   # ← 追加
 
     steps:
       - name: Checkout
@@ -21,11 +23,8 @@ jobs:
           mkdir -p backend
           touch backend/.env.docker
 
-      # --- ① backend イメージをビルド ---------------------------------
       - name: Build backend image (api)
         run: docker compose build --build-arg BUILDKIT_INLINE_CACHE=1 api
 
-      # --- ② pytest を実行 -------------------------------------------
       - name: Run tests
-        # --rm で終了後にコンテナ削除
-        run: docker compose run --rm api pytest -q
+        run: docker compose run --rm -e OPENAI_API_KEY=$OPENAI_API_KEY api pytest -q
