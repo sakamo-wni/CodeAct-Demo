@@ -1,36 +1,29 @@
 # app/models/openai_client.py
 from openai import OpenAI
-from app.config import settings          # 先ほど追加した設定
+from app.config import settings
+import os
 
 client = OpenAI(
     api_key=settings.openai_api_key,
 )
 
-def invoke_openai(prompt: str,
-                  *,
-                  model: str | None = None,
-                  tools: list | None = None,
-                  max_tokens: int = 256,
-                  temperature: float = 0.0,
-                  **kwargs) -> dict:
+def invoke_openai(prompt: str, *, max_tokens: int = 256, temperature: float = 0):
     """
     OpenAI Chat Completions の薄いラッパー。
-    fallback_node から tools を渡すと CodeAct として動く。
-    テスト互換フォーマットで結果を返す。
+    環境変数 INVOKE_OPENAI_STRING=1 で後方互換モード（文字列を返す）
     """
-    rsp = client.chat.completions.create(
-        model=(model or settings.codeact_model).split(":", 1)[-1],  # "gpt-4o"
+    resp = client.chat.completions.create(
+        model=settings.openai_model,
         messages=[{"role": "user", "content": prompt}],
-        tools=tools,
-        tool_choice="auto" if tools else None,
         max_tokens=max_tokens,
         temperature=temperature,
-        **kwargs,
     )
-    content_text = rsp.choices[0].message.content
-    return {
-        "content": [{"text": content_text}]
-    }
+    text = resp.choices[0].message.content
+
+    # ---- 後方互換：文字列 or dict を選択 ----
+    if os.getenv("INVOKE_OPENAI_STRING", "0") == "1":
+        return text             # 旧テスト用
+    return {"content": [{"text": text}]}   # 新フォーマット
 
 # デバッグ用: python -m app.models.openai_client "こんにちは"
 if __name__ == "__main__":
