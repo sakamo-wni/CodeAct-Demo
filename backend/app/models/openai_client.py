@@ -2,12 +2,17 @@
 from openai import OpenAI
 from app.config import settings
 import os
+from typing import Any, Union
 
 client = OpenAI(
     api_key=settings.openai_api_key,
 )
 
-def invoke_openai(prompt: str, *, max_tokens: int = 256, temperature: float = 0) -> str:
+def invoke_openai(
+    prompt: str,
+    max_tokens: int = 256,
+    temperature: float = 0.0,
+) -> Union[str, dict]:
     """
     OpenAI Chat Completions の薄いラッパー。
     環境変数 INVOKE_OPENAI_STRING=1 で後方互換モード（文字列を返す）
