@@ -19,10 +19,10 @@ jobs:
         run: |
           mkdir -p backend
           cat > backend/.env.docker <<'EOF'
-OPENAI_API_KEY=${OPENAI_API_KEY}
-# AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-# AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-EOF
+          OPENAI_API_KEY=${OPENAI_API_KEY}
+          # AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+          # AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+          EOF
           echo "✅ .env.docker written"
 
       # ② backend イメージをビルド
