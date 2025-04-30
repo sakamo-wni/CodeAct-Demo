@@ -1,10 +1,14 @@
+# backend/tests/test_ru_utils.py
 import pandas as pd
 import pytest
-from app.utils.ru_utils import load_ru
+from app.utils.ru_utils import load_ru, load_geojson
 
-@pytest.mark.skip(reason="地点メタは RU ではなく location.json で扱うためスキップ")
-def test_load_geojson():
-    pass
+def test_load_geojson(sample_geojson):
+    geojson = load_geojson("441000205")
+    assert isinstance(geojson, dict)
+    assert geojson["type"] == "FeatureCollection"
+    assert len(geojson["features"]) > 0
+    assert "coordinates" in geojson["features"][0]["geometry"]
 
 def test_load_gzip_obs(sample_obs_ru):
     df = load_ru(sample_obs_ru)

@@ -2,11 +2,11 @@
 from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
-from pydantic import Field
+from pydantic import Field, AliasChoices
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # プロジェクト Root（backend ディレクトリ）を特定
-BACKEND_ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parent.parent
 
 class Settings(BaseSettings):
     # --- 一般 ---
@@ -23,13 +23,21 @@ class Settings(BaseSettings):
     bedrock_session_token: str | None = Field(None, alias="BEDROCK_SESSION_TOKEN")
     bedrock_region: str = Field("us-east-1", alias="BEDROCK_REGION")
 
+    # --- OpenAI ---
+    openai_api_key: str = Field(..., validation_alias="OPENAI_API_KEY")
+    openai_org_id: str | None = Field(None, validation_alias="OPENAI_ORG_ID")
+    codeact_model: str = Field("openai:gpt-4o", validation_alias="CODEACT_MODEL")
+
     # --- Pydantic Settings ---
     model_config = SettingsConfigDict(
-        env_file=str(BACKEND_ROOT / ".env.docker"),   # ← ルート直下を読む
-        extra="ignore",
+        env_file=[ROOT / ".env", ROOT / ".env.docker"],
         case_sensitive=False,
+        extra="ignore",
     )
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     return Settings()
+
+# グローバルなsettingsインスタンスを作成
+settings = get_settings()
