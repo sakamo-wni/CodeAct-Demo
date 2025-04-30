@@ -87,3 +87,12 @@ backend/tmp/
 frontend/.next/
 node_modules/
 
+# ---- local reports ---------------------------------
+backend/coverage_report.*
+frontend/*structure.zip
+
+output.csv
+directory_structure.txt
+
+backend/output.csv
+frontend/directory_structire.txt
