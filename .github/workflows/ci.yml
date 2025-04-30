@@ -32,6 +32,9 @@ EOF
       - name: Build backend image
         run: docker compose build api
 
-      # ③ pytest を実行（env_file が効いている）
+      # ③ pytest を実行（‐e でキーを直渡し）
       - name: Run tests
-        run: docker compose run --rm api pytest -q
+        run: |
+          docker compose run --rm \
+            -e OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }} \
+            api pytest -q
