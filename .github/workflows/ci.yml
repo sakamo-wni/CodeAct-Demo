@@ -1,31 +1,40 @@
 name: CI
-
 on:
-  pull_request:
   push:
     branches: [main]
+  pull_request: {}
+  # 手動で走らせたい場合は ↓ を追加
+  # workflow_dispatch: {}
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v3
 
-      - name: Create dummy env file
+      # ① Secrets を backend/.env.docker に書き込む
+      - name: Prepare env file for Docker
         run: |
           mkdir -p backend
-          touch backend/.env.docker
+          cat > backend/.env.docker <<EOF
+OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+# AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}
+# AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}
+EOF
+          echo "✅ .env.docker written"
 
-      # --- ① backend イメージをビルド ---------------------------------
-      - name: Build backend image (api)
-        run: docker compose build --build-arg BUILDKIT_INLINE_CACHE=1 api
+      # ② backend イメージをビルド
+      - name: Build backend image
+        run: docker compose build api
 
-      # --- ② pytest を実行 -------------------------------------------
+      # ③ pytest を実行（‐e でキーを直渡し）
       - name: Run tests
-        # --rm で終了後にコンテナ削除
-        run: docker compose run --rm api pytest -q
+        run: |
+          docker compose run --rm \
+            -e OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }} \
+            api pytest -q
