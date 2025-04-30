@@ -10,19 +10,27 @@ def invoke_openai(prompt: str,
                   *,
                   model: str | None = None,
                   tools: list | None = None,
-                  **kwargs) -> str:
+                  max_tokens: int = 256,
+                  temperature: float = 0.0,
+                  **kwargs) -> dict:
     """
     OpenAI Chat Completions の薄いラッパー。
     fallback_node から tools を渡すと CodeAct として動く。
+    テスト互換フォーマットで結果を返す。
     """
     rsp = client.chat.completions.create(
         model=(model or settings.codeact_model).split(":", 1)[-1],  # "gpt-4o"
         messages=[{"role": "user", "content": prompt}],
         tools=tools,
         tool_choice="auto" if tools else None,
+        max_tokens=max_tokens,
+        temperature=temperature,
         **kwargs,
     )
-    return rsp.choices[0].message.content
+    content_text = rsp.choices[0].message.content
+    return {
+        "content": [{"text": content_text}]
+    }
 
 # デバッグ用: python -m app.models.openai_client "こんにちは"
 if __name__ == "__main__":
