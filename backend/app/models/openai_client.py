@@ -7,13 +7,14 @@ client = OpenAI(
     api_key=settings.openai_api_key,
 )
 
-def invoke_openai(prompt: str, *, max_tokens: int = 256, temperature: float = 0):
+def invoke_openai(prompt: str, *, max_tokens: int = 256, temperature: float = 0) -> str:
     """
     OpenAI Chat Completions の薄いラッパー。
     環境変数 INVOKE_OPENAI_STRING=1 で後方互換モード（文字列を返す）
     """
+    model_name = settings.codeact_model.split(":", 1)[-1]  # "gpt-4o" などを再利用
     resp = client.chat.completions.create(
-        model=settings.openai_model,
+        model=model_name,
         messages=[{"role": "user", "content": prompt}],
         max_tokens=max_tokens,
         temperature=temperature,
