@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import get_settings
 from langserve import add_routes
 from app.agent.flow import workflow
+from app.sse import router as sse_router
 
 # ── FastAPI インスタンス ───────────────────────────────────
 app = FastAPI()
@@ -28,6 +29,9 @@ app.add_middleware(
 
 # ── LangGraph エージェントを /agent にマウント ─────────────
 add_routes(app, workflow, path="/agent")
+
+# ── SSEルーターを追加 ─────────────────────────────────────
+app.include_router(sse_router)
 
 # ── ヘルスチェック ───────────────────────────────────────
 @app.get("/health", tags=["system"])

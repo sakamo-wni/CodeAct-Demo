@@ -1,6 +1,6 @@
+# backend/app/utils/ru_utils.py
 """
 ru_utils.py – RU ファイル（GeoJSON / gzip 観測）→ pandas.DataFrame
-
 ・フォーマット自動判定
     - header.format == "GJSON"           → GeoJSON 地点メタ
     - header.compress_type == "gzip"     → 観測データ (KNMI_OBS_SYNOP_raw など)
@@ -17,8 +17,19 @@ import io
 import pandas as pd
 import numbers
 import numpy as np
+import boto3
+import logging
 
 from app.agent.tools.RU import RU, Header  # RU.py を tools 配下へ移動済み前提
+
+# ロギング設定
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
+
+# AWS設定
+AWS_DEFAULT_REGION = "ap-northeast-1"
+S3_BUCKET = "wni-wfc-stock-ane1"  # 実際のバケット名
+CLIENT_KWARGS = {}  # 必要に応じて認証情報などを設定
 
 # 「…/backend/app/utils/ru_utils.py」から見て 3 つ親 = backend/
 BACKEND_ROOT = Path(__file__).resolve().parents[2]   # /code/backend
@@ -28,7 +39,7 @@ VARIABLES_MAP: Dict[str, Dict] = json.loads(
     (BACKEND_ROOT / "app" / "data" / "variables_map.json").read_text(encoding="utf-8")
 )
 
-__all__ = ["load_ru", "ensure_latlon", "extract_columns", "resolve_variable"]
+__all__ = ["load_ru", "ensure_latlon", "extract_columns", "resolve_variable", "load_geojson"]
 
 # ----------------------------------------------------------------------
 def _load_geojson(body: bytes) -> pd.DataFrame:
@@ -215,3 +226,42 @@ def resolve_variable(alias: str) -> str:
 
     # 3) 未解決ならそのまま
     return alias
+
+
+def load_geojson(tag_id: str) -> dict:
+    """
+    tag_idに対応するGeoJSONデータを取得する関数
+    テスト用ローカルファイルがあれば先に読み込む
+    なければS3から取得
+    """
+    project_root = Path(__file__).parents[2]
+    test_file = project_root / "tests" / "data" / tag_id / "location.json"
+    if test_file.exists():
+        logger.debug(f"Loading local GeoJSON: {test_file}")
+        data = test_file.read_bytes()
+        end_idx = data.find(b"\x04\x1a")
+        if end_idx == -1:
+            logger.error(f"Invalid RU header in {test_file}")
+            raise ValueError("Invalid RU header")
+        body = data[end_idx + 2 :]
+        try:
+            return json.loads(body.decode("utf-8"))
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse GeoJSON in {test_file}: {e}")
+            raise ValueError(f"Failed to parse GeoJSON: {e}")
+    
+    logger.debug(f"Fetching GeoJSON from S3: {tag_id}/location.json")
+    s3 = boto3.client("s3", region_name=AWS_DEFAULT_REGION, **CLIENT_KWARGS)
+    key = f"{tag_id}/location.json"
+    try:
+        resp = s3.get_object(Bucket=S3_BUCKET, Key=key)
+        data = resp["Body"].read()
+        end_idx = data.find(b"\x04\x1a")
+        if end_idx == -1:
+            logger.error(f"Invalid RU header in S3 object: {key}")
+            raise ValueError("Invalid RU header")
+        body = data[end_idx + 2 :]
+        return json.loads(body.decode("utf-8"))
+    except s3.exceptions.NoSuchKey:
+        logger.error(f"GeoJSON not found in S3: {key}")
+        raise FileNotFoundError(f"GeoJSON not found: {key}")

@@ -3,6 +3,10 @@ from typing import Any, Dict, Union
 from .RU import RU
 import os
 import json
+import pandas as pd
+import io
+
+__all__ = ["RUParser"]
 
 def parse_ru_file(path: str) -> Dict[str, Any]:
     """
@@ -129,3 +133,57 @@ def dump_node(node) -> Any:
         return node.value
     else:
         return node.value
+
+class RUParser:
+    """
+    e2e テスト専用の薄いラッパ
+      1) sample.ru バイナリ (`bytes`)
+      2) 位置情報 JSON のパス
+    を受け取り、DataFrame／dict を返す。
+    """
+
+    def __init__(self, ru_bytes: bytes, location_json: str | Path):
+        self._ru_bytes = ru_bytes
+        self._loc_path = Path(location_json)
+        self._parsed = None  # lazy
+
+    # ─────────────────────────────────────────────
+    def _ensure_parsed(self):
+        if self._parsed is None:
+            # 位置情報を RU ファイル（GeoJSON）としてロードし、GeoJSON 部分を抽出
+            try:
+                with self._loc_path.open("rb") as fp:
+                    content = fp.read()
+                    # RU ヘッダーの終端（\x04\x1a）を探す
+                    end_of_header = content.find(b'\x04\x1a') + 2
+                    if end_of_header <= 2:
+                        raise ValueError(f"No RU header end found in {self._loc_path}")
+                    # GeoJSON 部分を抽出
+                    geojson_data = content[end_of_header:].decode('utf-8', errors='ignore')
+                    location = json.loads(geojson_data)
+            except json.JSONDecodeError as e:
+                raise ValueError(f"Failed to parse GeoJSON data in {self._loc_path}: {e}") from e
+            except Exception as e:
+                raise ValueError(f"Failed to process {self._loc_path}: {e}") from e
+
+            # 既存の RU クラスで sample.ru をパース
+            try:
+                ru_obj = RU()
+                ru_obj.load(io.BytesIO(self._ru_bytes))
+                self._parsed = ru_to_dict(ru_obj)
+                # location データを parsed に統合（必要に応じて）
+                self._parsed["location"] = location
+            except Exception as e:
+                raise ValueError(f"Failed to parse sample.ru: {e}") from e
+
+    # ─────────────────────────────────────────────
+    def to_dict(self) -> dict:
+        """RU 全体を辞書で取得"""
+        self._ensure_parsed()
+        return self._parsed
+
+    def to_dataframe(self) -> pd.DataFrame:
+        """point_data 部分を pandas.DataFrame で取得（e2e テストで使用）"""
+        self._ensure_parsed()
+        point_data = self._parsed["data"]["point_data"]
+        return pd.DataFrame(point_data)

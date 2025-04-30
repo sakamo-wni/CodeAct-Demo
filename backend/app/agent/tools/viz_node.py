@@ -9,7 +9,7 @@ import matplotlib
 matplotlib.use("Agg")           # ヘッドレス環境用
 import matplotlib.pyplot as plt
 import cartopy.crs as ccrs
-from langchain.tools import tool
+from langchain_core.tools import tool
 
 from app.utils.ru_utils import (
     load_ru,
