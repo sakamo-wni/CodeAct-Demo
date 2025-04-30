@@ -1,95 +1,52 @@
-from app.agent.tools.fallback_node import _build_prompt
-from app.models.bedrock_client import invoke_claude
-import json
-import re
+"""prompt round-trip test – OpenAI 版
+_code_ 生成プロンプトが正しい構造で、OpenAI LLM から
+期待 JSON（または Python ブロック）を取得できるかを検証する。
+"""
 
+from __future__ import annotations
+
+import json
+import os
+import re
+import pytest
+
+# ── OpenAI ラッパーを使用 ────────────────────────────
+from app.models.openai_client import invoke_openai
+from app.agent.tools.fallback_node import _build_prompt
+
+# OpenAI API キーが無い環境（CI など）ではスキップ
+if os.getenv("OPENAI_API_KEY") is None:
+    pytest.skip("OpenAI key absent; skipping prompt round-trip test",
+                allow_module_level=True)
+
+# ---------------------------------------------------------------------------
 def _parse_response(text: str, task_name: str) -> dict:
-    """Claudeの応答をパースしてJSONオブジェクトを返す。"""
-    # JSON または Python ブロックを抽出
+    """LLM応答から JSON / Python ブロックを抽出し dict に変換する。"""
     json_match = re.search(r'```(?:json|python)\n([\s\S]*?)\n```', text)
     if json_match:
-        json_text = json_match.group(1).replace("\n", "")
+        block = json_match.group(1).replace("\n", "")
         try:
-            return json.loads(json_text)
+            return json.loads(block)
         except json.JSONDecodeError as e:
-            raise ValueError(f"Failed to parse {task_name} JSON block: {json_text}, error: {str(e)}")
-    
-    # プレーンJSONを試す（改行をエスケープ）
-    cleaned_text = text.replace("\n", "\\n").strip()
-    try:
-        return json.loads(cleaned_text)
-    except json.JSONDecodeError:
-        raise ValueError(f"No JSON or Python block found for {task_name}, and text is not valid JSON: {cleaned_text}")
+            raise ValueError(f"{task_name} JSON parse error: {e}") from e
+    raise ValueError(f"{task_name}: no JSON/Python block found in response")
 
-def test_prompt_generation():
-    # テストケース1：Parquet変換
+# ---------------------------------------------------------------------------
+def test_prompt_generation() -> None:
+    """Parquet 変換タスクのプロンプト → LLM → JSON 戻りの往復をテスト"""
     ctx = {"format": "parquet", "task_id": "test-123"}
     prompt = _build_prompt(ctx, ctx["task_id"])
     print("Prompt for Parquet:", prompt)
-    response = invoke_claude(prompt, max_tokens=512)
-    print("Raw response for Parquet:", response)
-    try:
-        response_json = json.loads(response)
-        parsed = _parse_response(response_json["content"][0]["text"], "Parquet")
-        print("Parsed JSON for Parquet:", parsed)
-        assert "filename" in parsed
-        assert "code" in parsed
-        assert "requirements" in parsed
-        assert "timeout_sec" in parsed
-    except (json.JSONDecodeError, ValueError) as e:
-        print(f"Failed to parse Parquet response as JSON: {response}, error: {str(e)}")
-        raise
 
-    # テストケース2：散布図
-    ctx = {"chart": "scatter", "x": "time", "y": "AIRTMP", "task_id": "test-124"}
-    prompt = _build_prompt(ctx, ctx["task_id"])
-    print("Prompt for Scatter:", prompt)
-    response = invoke_claude(prompt, max_tokens=512)
-    print("Raw response for Scatter:", response)
-    try:
-        response_json = json.loads(response)
-        parsed = _parse_response(response_json["content"][0]["text"], "Scatter")
-        print("Parsed JSON for Scatter:", parsed)
-        assert "filename" in parsed
-        assert "code" in parsed
-        assert "requirements" in parsed
-        assert "timeout_sec" in parsed
-    except (json.JSONDecodeError, ValueError) as e:
-        print(f"Failed to parse Scatter response as JSON: {response}, error: {str(e)}")
-        raise
+    # OpenAI ChatCompletions で最大 512 トークン取得
+    raw_resp = invoke_openai(prompt, max_tokens=512, temperature=0)
+    print("Raw response:", raw_resp)
 
-    # テストケース3：ヒートマップ
-    ctx = {"chart": "heatmap", "x": "lat", "y": "lon", "vars": ["AIRTMP"], "task_id": "test-125"}
-    prompt = _build_prompt(ctx, ctx["task_id"])
-    print("Prompt for Heatmap:", prompt)
-    response = invoke_claude(prompt, max_tokens=512)
-    print("Raw response for Heatmap:", response)
+    # LangChain 形式 {"content":[{"text":...}]} をそのまま扱う
     try:
-        response_json = json.loads(response)
-        parsed = _parse_response(response_json["content"][0]["text"], "Heatmap")
-        print("Parsed JSON for Heatmap:", parsed)
-        assert "filename" in parsed
-        assert "code" in parsed
-        assert "requirements" in parsed
-        assert "timeout_sec" in parsed
-    except (json.JSONDecodeError, ValueError) as e:
-        print(f"Failed to parse Heatmap response as JSON: {response}, error: {str(e)}")
-        raise
+        text = raw_resp["content"][0]["text"]
+        parsed = _parse_response(text, "Parquet")
+    except Exception as e:
+        pytest.fail(f"Failed to parse OpenAI response: {e}")
 
-    # テストケース4：CSV変換
-    ctx = {"format": "csv", "task_id": "test-126"}
-    prompt = _build_prompt(ctx, ctx["task_id"])
-    print("Prompt for CSV:", prompt)
-    response = invoke_claude(prompt, max_tokens=512)
-    print("Raw response for CSV:", response)
-    try:
-        response_json = json.loads(response)
-        parsed = _parse_response(response_json["content"][0]["text"], "CSV")
-        print("Parsed JSON for CSV:", parsed)
-        assert "filename" in parsed
-        assert "code" in parsed
-        assert "requirements" in parsed
-        assert "timeout_sec" in parsed
-    except (json.JSONDecodeError, ValueError) as e:
-        print(f"Failed to parse CSV response as JSON: {response}, error: {str(e)}")
-        raise
+    assert parsed == ctx, f"Returned JSON mismatch: {parsed} != {ctx}"

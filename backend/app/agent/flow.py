@@ -25,7 +25,7 @@ logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 viz_node = _vz_tool.func
-fallback_node = _fb_tool.func
+fallback_node = _fb_tool
 
 # ---------- 1. 状態定義 -------------------------------------------------
 class FlowState(TypedDict, total=False):

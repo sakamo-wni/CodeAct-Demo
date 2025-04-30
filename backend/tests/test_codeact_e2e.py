@@ -41,10 +41,6 @@ def test_codeact_e2e(tmp_path, monkeypatch):
         assert out_csv.exists() and out_csv.suffix == ".csv", f"CSV not generated: {out_csv}"
         assert out_csv.name == "output.csv", f"Wrong CSV name: {out_csv.name}"
 
-        # ファイルを現在のディレクトリにコピー
-        shutil.copy(out_csv, "output.csv")
-        print(f"[DEBUG] Copied output.csv to current directory: {Path.cwd()}/output.csv")
-
         df_from_csv = pd.read_csv(out_csv, dtype=str)
         print(f"[DEBUG] Generated CSV dtypes:\n{df_from_csv.dtypes}")
         print(f"[DEBUG] Generated CSV head:\n{df_from_csv.head()}")

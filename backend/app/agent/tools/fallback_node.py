@@ -25,7 +25,21 @@ from langgraph_codeact import create_codeact
 USE_CODEACT: bool = os.getenv("CODEACT_DISABLED", "0") != "1"
 FALLBACK_ENABLED: bool = os.getenv("FALLBACK_ENABLED", "1") == "1"
 
-__all__ = ["fallback_node", "USE_CODEACT"]
+__all__ = ["fallback_node", "_build_prompt", "USE_CODEACT"]
+
+def _build_prompt(ctx: dict[str, Any], task_id: str | None = None) -> str:
+    """
+    tests/test_prompt.py から import される関数。
+
+    ctx には {"format": "...", "task_id": "...", ...} が入る。
+    DataFrame は巨大なので除外し、残りを JSON 表現した文字列を返す。
+    """
+    safe_ctx = {k: v for k, v in ctx.items() if k != "df"}
+    json_body = json.dumps(safe_ctx, ensure_ascii=False)
+    return (
+        "Generate python code for the following task.\n"
+        f"```json\n{json_body}\n```"
+    )
 
 def save_df_to_csv(df: pd.DataFrame, path: str | Path) -> None:
     """Save **df** to *path* as CSV (quoted, no index)."""
@@ -106,6 +120,12 @@ def fallback_node(ctx: Dict[str, Any]) -> Dict[str, Any]:
     """Run CodeAct (if enabled) and adapt its output to the test contract."""
     global _LATEST_DF
     _LATEST_DF = ctx["df"]
+
+    # --- chart しか無い場合はここで format を補完 ---
+    if "format" not in ctx and "chart" in ctx:
+        ctx["format"] = "png"
+
+    # これより下で ctx["format"] を安全に参照できる
 
     if not USE_CODEACT:
         if FALLBACK_ENABLED:
