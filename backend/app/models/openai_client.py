@@ -3,6 +3,7 @@ from openai import OpenAI
 from app.config import settings
 import os
 from typing import Any, Union
+from langchain.chat_models import ChatOpenAI
 
 client = OpenAI(
     api_key=settings.openai_api_key,
@@ -13,23 +14,28 @@ def invoke_openai(
     max_tokens: int = 256,
     temperature: float = 0.0,
 ) -> Union[str, dict]:
+    """OpenAI ChatCompletions を呼び出す簡易ラッパー
+       - 旧コード互換のため str も返せるようにする
     """
-    OpenAI Chat Completions の薄いラッパー。
-    環境変数 INVOKE_OPENAI_STRING=1 で後方互換モード（文字列を返す）
-    """
-    model_name = settings.codeact_model.split(":", 1)[-1]  # "gpt-4o" などを再利用
-    resp = client.chat.completions.create(
-        model=model_name,
-        messages=[{"role": "user", "content": prompt}],
-        max_tokens=max_tokens,
+    llm = ChatOpenAI(
+        api_key=settings.openai_api_key,
+        model=settings.codeact_model.split(":", 1)[-1],
         temperature=temperature,
     )
-    text = resp.choices[0].message.content
+    rsp = llm.invoke(prompt, max_tokens=max_tokens)
 
-    # ---- 後方互換：文字列 or dict を選択 ----
-    if os.getenv("INVOKE_OPENAI_STRING", "0") == "1":
-        return text             # 旧テスト用
-    return {"content": [{"text": text}]}   # 新フォーマット
+    # ---- 戻り値を統一的に「テキスト str」で返す ----
+    if hasattr(rsp, "content"):          # LangChain AIMessage
+        return rsp.content
+    if isinstance(rsp, dict):            # OpenAI raw dict 形式
+        # {"content":[{"text": "..."}]} という構造
+        try:
+            return rsp["content"][0]["text"]
+        except Exception:
+            pass
+
+    # それ以外はそのまま
+    return str(rsp)
 
 # デバッグ用: python -m app.models.openai_client "こんにちは"
 if __name__ == "__main__":
