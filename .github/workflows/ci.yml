@@ -3,6 +3,8 @@ on:
   push:
     branches: [main]
   pull_request: {}
+  # 手動で走らせたい場合は ↓ を追加
+  # workflow_dispatch: {}
 
 jobs:
   test:
@@ -13,25 +15,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Python だけでなく Docker ビルド用の環境も使うので Buildx は残す
       - uses: docker/setup-buildx-action@v3
 
-      # ① Secrets を書き込んだ .env.docker を生成
+      # ① Secrets を backend/.env.docker に書き込む
       - name: Prepare env file for Docker
         run: |
           mkdir -p backend
-          cat <<EOF > backend/.env.docker
-          OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
-          # ↓将来 Bedrock を使うならここに追加
-          # AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}
-          # AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          EOF
-          ls -l backend/.env.docker   # デバッグ用に内容は伏せたまま存在確認
+          cat > backend/.env.docker <<EOF
+OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+# AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}
+# AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}
+EOF
+          echo "✅ .env.docker written"
 
-      # ② backend イメージをビルド（キャッシュ効くならお好みで arg 維持）
+      # ② backend イメージをビルド
       - name: Build backend image
         run: docker compose build api
 
-      # ③ pytest を実行（env_file 経由なので -e は不要）
+      # ③ pytest を実行（env_file が効いている）
       - name: Run tests
         run: docker compose run --rm api pytest -q
