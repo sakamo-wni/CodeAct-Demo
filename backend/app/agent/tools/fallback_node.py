@@ -2,7 +2,7 @@
 fallback_node – CodeAct 0.1.3 対応版
 ───────────────────────────────────────────────────────────────
 * CodeActContext が Pydantic-model で渡る場合でも format='csv' 等を
-  正しく引き渡し、生成コードが output.csv / result.parquet を作成
+  正しく引き渡し、生成コードが output.csv / result.json を作成
 * (code_str, {"result": {...}}) 形式の戻り値を許容
 """
 
@@ -13,6 +13,7 @@ import json
 import os
 import tempfile
 import uuid
+import ast
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -45,20 +46,26 @@ def save_df_to_csv(df: pd.DataFrame, path: str | Path) -> None:
     """Save **df** to *path* as CSV (quoted, no index)."""
     df.to_csv(path, index=False, quoting=csv.QUOTE_NONNUMERIC)
 
-def _save_parquet(df: pd.DataFrame, out: Path) -> None:
-    """Save **df** to *out* as Parquet using pyarrow."""
-    import pyarrow as pa
-    import pyarrow.parquet as pq
-    pq.write_table(pa.Table.from_pandas(df), out)
+def save_df_to_json(df: pd.DataFrame, path: str | Path) -> None:
+    """Save **df** to *path* as JSON, ensuring LCLID is string."""
+    df = df.copy()
+    df["LCLID"] = df["LCLID"].astype(str).str.zfill(5)  # ゼロパディングを保持
+    df.to_json(path, orient="records", lines=True)
 
 _LATEST_DF: pd.DataFrame | None = None
 
 def _fallback_quick(ctx: Dict[str, Any]) -> Dict[str, Any]:
-    """Always generate `output.csv` under a temp dir and return its path."""
+    """Always generate output file under a temp dir and return its path."""
     df: pd.DataFrame = ctx["df"]
+    fmt = ctx["format"]
     workdir = Path(tempfile.mkdtemp(prefix="codeact_quick_"))
-    out = workdir / "output.csv"
-    save_df_to_csv(df, out)
+    out = workdir / f"output.{fmt}"
+    if fmt == "csv":
+        save_df_to_csv(df, out)
+    elif fmt == "json":
+        save_df_to_json(df, out)
+    else:
+        raise ValueError(f"Unsupported format: {fmt}")
     return {"files": [str(out)], "used_codeact": False}
 
 if USE_CODEACT:
@@ -81,10 +88,9 @@ if USE_CODEACT:
                 "__name__": "__main__",
                 "Path": Path,
                 "workdir": workdir,
-                "format": ctx_format,  # ctx["format"]を直接使用
-                "chart": context.get("chart") if isinstance(context, dict) else None,
+                "format": ctx_format,
                 "save_df_to_csv": save_df_to_csv,
-                "_save_parquet": _save_parquet,
+                "save_df_to_json": save_df_to_json,
                 "json": json,
             }
             if _LATEST_DF is not None:
@@ -94,12 +100,16 @@ if USE_CODEACT:
             print(f"[DEBUG] format value: {exec_globals['format']}")
             print(f"[DEBUG] workdir exists: {workdir.exists()}, writable: {os.access(workdir, os.W_OK)}")
             try:
+                ast.parse(code)
                 exec(code, exec_globals)
                 result = exec_globals.get("result", {})
                 if not isinstance(result, dict):
                     return ("", {"error": "Code did not return a valid JSON bundle"})
                 print(f"[DEBUG] Execution result: {result}")
                 return ("", {"result": result})
+            except SyntaxError as se:
+                print(f"[DEBUG] SyntaxError in generated code: {se}")
+                return ("", {"error": f"SyntaxError: {se}"})
             except Exception as exc:
                 print(f"[DEBUG] Execution failed: {exc}")
                 return ("", {"error": str(exc)})
@@ -110,22 +120,20 @@ if USE_CODEACT:
         return (
             create_codeact(
                 openai_model,
-                [save_df_to_csv, _save_parquet],
+                [save_df_to_csv, save_df_to_json],
                 _make_eval_fn(workdir, ctx_format),
             )
             .compile(checkpointer=MemorySaver())
         )
 
 def fallback_node(ctx: Dict[str, Any]) -> Dict[str, Any]:
-    """Run CodeAct (if enabled) and adapt its output to the test contract."""
+    """Run CodeAct (if enabled) and adapt its output to the test contract.
+    
+    The input DataFrame (ctx['df']) is derived from sample.ru, parsed using RUParser
+    with location.json to map observation station IDs and metadata.
+    """
     global _LATEST_DF
     _LATEST_DF = ctx["df"]
-
-    # --- chart しか無い場合はここで format を補完 ---
-    if "format" not in ctx and "chart" in ctx:
-        ctx["format"] = "png"
-
-    # これより下で ctx["format"] を安全に参照できる
 
     if not USE_CODEACT:
         if FALLBACK_ENABLED:
@@ -133,33 +141,32 @@ def fallback_node(ctx: Dict[str, Any]) -> Dict[str, Any]:
         raise ValueError("CodeAct is disabled and fallback is not enabled")
 
     workdir = TMPDIR
+    workdir.mkdir(exist_ok=True)
     before = {p.name for p in workdir.iterdir()}
-
-    # ctx["format"]をエージェントに渡す
     _codeact_agent = create_codeact_agent(workdir, ctx["format"])
 
     prompt = (
-        f"グローバル変数として、pandas DataFrameの`df`、Pathオブジェクトの`workdir`、文字列の`format`（'{ctx['format']}'）、およびオプションの`chart`が与えられます。\n"
-        "あなたのタスクは、`format`に基づいて`df`をファイルに保存するPythonコードを生成することです。\n"
-        "- `format`が'csv'の場合、`save_df_to_csv(df, path)`を使用して`workdir/'output.csv'`に保存します。\n"
-        "- `format`が'parquet'の場合、`_save_parquet(df, path)`を使用して`workdir/'result.parquet'`に保存します。\n"
-        "- `chart`がNoneでない場合、`df[chart.x]`と`df[chart.y]`の散布図を作成し、`workdir/'output.png'`に保存します。\n"
-        "以下の要件を満たしてください：\n"
-        "- `main()`関数を定義し、要求された操作を実行して辞書を返します。\n"
-        "- 辞書を`result`変数に割り当て、キーは{{'filename': str, 'code': str, 'requirements': list, 'timeout_sec': int}}です。\n"
-        "- グローバル変数`format`, `df`, `workdir`, `save_df_to_csv`を明示的に使用します。\n"
-        f"- 現在の`format`は'{ctx['format']}'です。\n"
-        "CSVの例（format='csv'の場合）：\n"
+        f"Generate Python code to save a pandas DataFrame `df` to a file based on the global string variable `format` ('{ctx['format']}').\n"
+        "Available functions:\n"
+        "- `save_df_to_csv(df, path)`: Save to `workdir/'output.csv'`.\n"
+        "- `save_df_to_json(df, path)`: Save to `workdir/'output.json'`.\n"
+        "Requirements:\n"
+        "- Define a `main()` function that returns a dictionary {{'filename': str, 'code': str, 'requirements': list, 'timeout_sec': int}}.\n"
+        "- Use global variables `format`, `df`, `workdir`, and the appropriate save function.\n"
+        "- Generate a single complete code block with no extra text, comments, or print statements.\n"
+        f"- Current `format` is '{ctx['format']}'.\n"
+        f"Example for format='{ctx['format']}':\n"
         "```python\n"
         "from pathlib import Path\n"
         "def main():\n"
-        "    global format, df, workdir, save_df_to_csv\n"
-        "    save_df_to_csv(df, workdir / 'output.csv')\n"
-        "    return {{'filename': 'output.csv', 'code': 'save_df_to_csv(df, workdir / \"output.csv\")', 'requirements': [], 'timeout_sec': 10}}\n"
+        f"    global format, df, workdir, save_df_to_{ctx['format']}\n"
+        f"    if format == '{ctx['format']}':\n"
+        f"        save_df_to_{ctx['format']}(df, workdir / 'output.{ctx['format']}')\n"
+        f"        return {{'filename': 'output.{ctx['format']}', 'code': 'save_df_to_{ctx['format']}(df, workdir / \"output.{ctx['format']}\")', 'requirements': [], 'timeout_sec': 10}}\n"
+        "    return {'filename': '', 'code': '', 'requirements': [], 'timeout_sec': 10}\n"
         "result = main()\n"
         "```\n"
-        "何も印刷しないでください。コードブロック外に説明テキストやコメントを含めないでください。\n"
-        "コードがエラーなく実行され、指定された出力ファイルが生成されることを確認してください。\n"
+        "Do not include any text outside the code block. Ensure the code is syntactically correct and completes in one response.\n"
     )
 
     try:
@@ -172,13 +179,15 @@ def fallback_node(ctx: Dict[str, Any]) -> Dict[str, Any]:
                 "configurable": {
                     "thread_id": ctx.get("task_id", str(uuid.uuid4())),
                     "temperature": 0,
+                    "recursion_limit": 50,
+                    "max_iterations": 5,  # 再帰を制限
                 }
             },
         )
     except Exception as exc:
+        print(f"[DEBUG] CodeAct invocation failed: {exc}")
         raise RuntimeError(f"CodeAct failed: {exc}") from exc
 
-    # ── 正常化 ─────────────────────────────────────
     if isinstance(raw, tuple) and len(raw) == 2:
         raw = raw[1]
 
@@ -203,8 +212,7 @@ def fallback_node(ctx: Dict[str, Any]) -> Dict[str, Any]:
     elif result_dict and result_dict.get("filename") not in {None, "", "None"}:
         files = [str(workdir / result_dict["filename"])]
 
-    # 期待される出力ファイルをチェック
-    expected_file = workdir / "output.csv" if ctx["format"] == "csv" else workdir / "result.parquet"
+    expected_file = workdir / f"output.{ctx['format']}"
     if expected_file.exists() and str(expected_file) not in files:
         files.append(str(expected_file))
 
